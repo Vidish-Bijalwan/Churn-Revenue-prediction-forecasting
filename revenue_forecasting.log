@@ -1,0 +1,834 @@
+
+fix the issues with my code like remove passowrd thing , the models loading issues (i am using my models ended by .pkl ) and other issues like  replace the speech recognition thing with something else because my curren tpython version do not support it ) provide me the completed each and every line by line code for my app.py    code : import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import joblib
+from transformers import pipeline, AutoModelForCausalLM, AutoTokenizer
+from streamlit_option_menu import option_menu
+import torch
+import os
+from datetime import datetime, timedelta
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from io import StringIO, BytesIO
+import time
+import base64
+from typing import Dict, Any
+import speech_recognition as sr
+import pyttsx3
+import json
+from PyPDF2 import PdfReader
+import openpyxl
+import scipy.stats as stats
+import asyncio  # imports for real-time updates
+import aiohttp   #imports for real-time updates
+import hmac    # New imports for user authentication
+import hashlib # New imports for user authentication
+
+# New import for anomaly detection
+from scipy import stats
+
+# Configuration and Setup
+st.set_page_config(page_title="ForeTel.AI", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
+
+# Custom CSS
+st.markdown("""
+<style>
+  .main {
+      padding: 2rem;
+  }
+  .metric-card {
+      background-color: #f0f2f6;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+  }
+  .metric-card h3 {
+      margin-top: 0;
+  }
+  .metric-card-value {
+      font-size: 2rem;
+      font-weight: bold;
+  }
+  .welcome-message {
+      background-color: #e6f3ff;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-bottom: 2rem;
+  }
+  .alert-high {
+      color: #721c24;
+      background-color: #f8d7da;
+      padding: 0.5rem;
+      border-radius: 0.25rem;
+  }
+  .alert-positive {
+      color: #155724;
+      background-color: #d4edda;
+      padding: 0.5rem;
+      border-radius: 0.25rem;
+  }
+  .alert-warning {
+      color: #856404;
+      background-color: #fff3cd;
+      padding: 0.5rem;
+      border-radius: 0.25rem;
+  }
+  .st-button {
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      padding: 0.5rem 1rem;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      margin: 4px 2px;
+      cursor: pointer;
+      border-radius: 0.25rem;
+  }
+</style>
+""", unsafe_allow_html=True)
+
+# JavaScript for real-time updates
+st.markdown("""
+<script>
+function updateData() {
+    fetch('/update_data')
+        .then(response => response.json())
+        .then(data => {// Update the UI with new data
+            document.getElementById('total-customers').textContent = data.total_customers;
+            document.getElementById('churn-rate').textContent = data.churn_rate + '%';
+            document.getElementById('revenue').textContent = '$' + data.revenue.toLocaleString();
+            document.getElementById('arpu').textContent = '$' + data.arpu.toFixed(2);
+        });
+}
+
+// Update data every 5 minutes
+setInterval(updateData, 300000);
+</script>
+""", unsafe_allow_html=True)
+
+# Caching and Loading Functions
+@st.cache_resource
+def load_data():
+    try:
+        df = pd.read_csv("telecom_dataset.csv")
+        df['TotalRevenue'] = df['MonthlySpending'] * df['TenureMonths']
+        df['ARPU'] = df['TotalRevenue'] / df['TenureMonths']
+        return df
+    except Exception as e:
+        st.error(f"Failed to load dataset: {str(e)}")
+        return pd.DataFrame()
+
+@st.cache_resource
+def load_models():
+    try:
+        churn_model = joblib.load('models/enhanced_churn_model.pkl')
+        revenue_model = joblib.load('models/revenue_forecasting.pkl')
+        nlp_model = pipeline('text2text-generation', model='google/flan-t5-base', device=0, use_auth_token=True, low_cpu_mem_usage=True)
+        return {
+            'churn': churn_model,
+            'revenue': revenue_model,
+            'nlp': nlp_model
+        }
+    except Exception as e:
+        st.error(f"Failed to load models: {str(e)}")
+    return {}
+
+def password_entered():
+    if hmac.compare_digest(st.session_state["password"], st.secrets["password"]["password"]):
+        st.success("Password is correct!")
+    else:
+        st.error("Incorrect password!")
+        
+@st.cache_resource
+def load_chatbot():
+    try:
+        model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16, device_map="auto")
+        return model, tokenizer
+    except Exception as e:
+        st.error(f"Failed to load chatbot: {str(e)}")
+        return None, None
+
+# Load data and models
+df = load_data()
+models = load_models()
+chatbot_model, chatbot_tokenizer = load_chatbot()
+
+# Utility Functions
+def get_real_metrics(df):
+    try:
+        total_customers = len(df)
+        churn_rate = (df["Churned"].sum() / total_customers) * 100
+        revenue = df["TotalRevenue"].sum()
+        arpu = df["ARPU"].mean()
+
+        return {
+            "total_customers": total_customers,
+            "churn_rate": round(churn_rate, 1),
+            "revenue": int(revenue),
+            "arpu": round(arpu, 2)
+        }
+    except Exception as e:
+        st.error(f"Failed to calculate metrics: {str(e)}")
+        return {}
+
+def create_metric_card(title, value, delta, icon):
+    delta_color = "text-green-500" if delta.startswith("+") else "text-red-500"
+    return f"""
+    <div class="metric-card">
+        <h3>{icon} {title}</h3>
+        <div class="metric-card-value">{value}</div>
+        <div class="{delta_color}">{delta}</div>
+    </div>
+    """
+
+# New function for real-time data updates
+async def update_data():
+    async with aiohttp.ClientSession() as session:
+        async with session.get('https://api.example.com/telecom-data') as response:
+            data = await response.json()
+            return data
+
+# New function for user authentication
+def check_password():
+    def password_entered():
+        if hmac.compare_digest(st.session_state["password"], st.secrets["password"]):
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.text_input(
+            "Password", type="password", on_change=password_entered, key="password"
+        )
+        return False
+    elif not st.session_state["password_correct"]:
+        st.text_input(
+            "Password", type="password", on_change=password_entered, key="password"
+        )
+        st.error("😕 Password incorrect")
+        return False
+    else:
+        return True   # New function for voice interaction
+def voice_interaction():
+    r = sr.Recognizer()
+    with sr.Microphone() as source:
+        st.write("Say something!")
+        audio = r.listen(source)
+
+    try:
+        text = r.recognize_google(audio)
+        st.write(f"You said: {text}")
+        return text
+    except sr.UnknownValueError:
+        st.write("Google Speech Recognition could not understand audio")
+    except sr.RequestError as e:
+        st.write(f"Could not request results from Google Speech Recognition service; {e}")
+
+# New function for data export
+def export_data(data, format):
+    if format == 'csv':
+        return data.to_csv(index=False)
+    elif format == 'excel':
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            data.to_excel(writer, index=False)
+        return output.getvalue()
+    elif format == 'pdf':
+        # This is a placeholder. You'll need to implement PDF generation.
+        return "PDF generation not implemented yet"
+
+# New function for recommendation engine
+def get_recommendations(customer_data):
+    # This is a placeholder. You'll need to implement your recommendation logic.
+    return [
+        "Offer a loyalty discount",
+        "Suggest an upgrade to a higher-tier plan",
+        "Provide a free trial of premium features"
+    ]
+
+# New function for A/B testing
+def setup_ab_test(test_name, variant_a, variant_b):
+    if 'ab_tests' not in st.session_state:
+        st.session_state.ab_tests = {}
+    st.session_state.ab_tests[test_name] = {
+        'A': {'variant': variant_a, 'conversions': 0, 'total': 0},
+        'B': {'variant': variant_b, 'conversions': 0, 'total': 0}
+    }
+
+def record_ab_test_result(test_name, variant, conversion):
+    if test_name in st.session_state.ab_tests:
+        st.session_state.ab_tests[test_name][variant]['total'] += 1
+        if conversion:
+            st.session_state.ab_tests[test_name][variant]['conversions'] += 1
+
+# New function for anomaly detection
+def detect_anomalies(data, column, threshold=3):
+    z_scores = stats.zscore(data[column])
+    return data[abs(z_scores) > threshold]
+
+# New function for predictive text
+def get_predictive_text(input_text, model, tokenizer):
+    inputs = tokenizer(input_text, return_tensors="pt")
+    with torch.no_grad():
+        outputs = model.generate(**inputs, max_length=50, num_return_sequences=3)
+    return [tokenizer.decode(output, skip_special_tokens=True) for output in outputs]
+
+# New function for multi-language support
+def translate_text(text, target_language):
+    # This is a placeholder. You'll need to implement translation logic.
+    return f"Translated to {target_language}: {text}"
+
+# Page Functions
+def show_home_page(df):
+    st.title("🏠 Telecom Analytics Platform")
+    
+    st.markdown("""
+        <div class="welcome-message">
+            <h2>Welcome to Advanced Telecom Analytics</h2>
+            <p>Leverage AI-powered insights to optimize your telecom operations, predict customer behavior, 
+            and maximize revenue potential.</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    metrics = get_real_metrics(df)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown(create_metric_card(
+            "Total Customers",
+            f"{metrics['total_customers']:,}",
+            "+2.5%",
+            "👥"
+        ), unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(create_metric_card(
+            "Churn Rate",
+            f"{metrics['churn_rate']}%",
+            "-0.8%",
+            "🔄"
+        ), unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown(create_metric_card(
+            "Revenue",
+            f"${metrics['revenue']:,.0f}",
+            "+12%",
+            "💰"
+        ), unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown(create_metric_card(
+            "ARPU",
+            f"${metrics['arpu']:.2f}",
+            "+5%",
+            "📈"
+        ), unsafe_allow_html=True)
+    
+    # Business Insights Dashboard
+    st.subheader("💡 Business Insights")
+    
+    col1, col2 = st.columns(2)      with col1:
+        segment_data = df['SubscriptionType'].value_counts().reset_index()
+        segment_data.columns = ['Segment', 'Customers']
+        segment_data['Growth'] = ['+12%', '+5%', '-2%']
+        fig = px.bar(
+            segment_data,
+            x='Segment',
+            y='Customers',
+            text='Growth',
+            title="Customer Segment Performance",
+            color='Segment',
+            color_discrete_map={'Premium': '#3b82f6', 'Standard': '#10b981', 'Basic': '#f59e0b'}
+        )
+        fig.update_traces(textposition='outside')
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        revenue_trend = df.groupby('TenureMonths')['TotalRevenue'].sum().reset_index()
+        revenue_trend['TenureMonths'] = pd.to_datetime(revenue_trend['TenureMonths'], unit='M')
+        fig = px.line(revenue_trend, x='TenureMonths', y='TotalRevenue', title="Revenue Trend")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # AI Insights Section
+    st.subheader("🤖 AI-Powered Insights")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+            <div class='metric-card'>
+                <h3>Churn Risk Alert</h3>
+                <p class="alert-high">High-value customers at risk</p>
+                <p>23 Premium customers showing churn indicators</p>
+                <button class='st-button' onclick="parent.postMessage({type: 'churn_risk'}, '*')">View Details</button>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+            <div class='metric-card'>
+                <h3>Revenue Opportunity</h3>
+                <p class="alert-positive">Upsell Potential</p>
+                <p>156 customers eligible for premium upgrades</p>
+                <button class='st-button' onclick="parent.postMessage({type: 'revenue_opportunity'}, '*')">Explore</button>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+            <div class='metric-card'>
+                <h3>Network Performance</h3>
+                <p class="alert-warning">Optimization Needed</p>
+                <p>3 regions showing high latency patterns</p>
+                <button class='st-button' onclick="parent.postMessage({type: 'network_performance'}, '*')">Investigate</button>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    # Handle button clicks
+    if st.session_state.get('button_clicked'):
+        if st.session_state.button_clicked == 'churn_risk':
+            st.subheader("Churn Risk Details")
+            high_risk_customers = df[(df['ChurnRiskScore'] > 0.7) & (df['SubscriptionType'] == 'Premium')]
+            st.write(f"Number of high-risk premium customers: {len(high_risk_customers)}")
+            st.write(high_risk_customers[['CustomerID', 'TenureMonths', 'MonthlySpending', 'ChurnRiskScore']])
+        elif st.session_state.button_clicked == 'revenue_opportunity':
+            st.subheader("Revenue Opportunities")
+            upsell_candidates = df[(df['SubscriptionType'] == 'Standard') & (df['MonthlySpending'] > df['MonthlySpending'].quantile(0.75))]
+            st.write(f"Number of potential upsell candidates: {len(upsell_candidates)}")
+            st.write(upsell_candidates[['CustomerID', 'TenureMonths', 'MonthlySpending', 'SubscriptionType']])
+        elif st.session_state.button_clicked == 'network_performance':
+            st.subheader("Network Performance Issues")
+            low_quality_regions = df.groupby('Region')['NetworkQuality'].mean().sort_values().head(3)
+            st.write("Regions with lowest average network quality:")
+            st.write(low_quality_regions)
+
+    # Add real-time update button
+    if st.button("Update Data"):
+        with st.spinner("Updating data..."):
+            new_data = asyncio.run(update_data())
+            st.success("Data updated successfully!")
+            st.write(new_data)def show_churn_prediction(df, models):
+    st.title("🔄 Churn Prediction")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.subheader("Customer Data Input")
+        
+        with st.form("churn_prediction_form"):
+            tenure = st.slider("Tenure (months)", 0, 120, 24)
+            monthly_spending = st.number_input("Monthly Spending ($)", 0.0, 1000.0, 70.0)
+            total_revenue = monthly_spending * tenure
+            subscription_type = st.selectbox("Subscription Type", df['SubscriptionType'].unique())
+            network_quality = st.slider("Network Quality", 1, 5, 3)
+            contract_type = st.selectbox("Contract Type", df['ContractType'].unique())
+            payment_method = st.selectbox("Payment Method", df['PaymentMethod'].unique())
+            
+            submitted = st.form_submit_button("Predict Churn Risk")
+            
+            if submitted:
+                input_data = pd.DataFrame({
+                    'TenureMonths': [tenure],
+                    'MonthlySpending': [monthly_spending],
+                    'TotalRevenue': [total_revenue],
+                    'SubscriptionType': [subscription_type],
+                    'NetworkQuality': [network_quality],
+                    'ContractType': [contract_type],
+                    'PaymentMethod': [payment_method]
+                })
+                
+                try:
+                    prediction = models['churn'].predict_proba(input_data)[0]
+                    churn_probability = prediction[1]
+                    
+                    prompt = f"""
+                    Analyze this customer's churn risk:
+                    - Tenure: {tenure} months
+                    - Monthly Spending: ${monthly_spending}
+                    - Contract: {contract_type}
+                    - Subscription: {subscription_type}
+                    - Network Quality: {network_quality}
+                    Provide a brief explanation of the {churn_probability:.1%} churn risk.
+                    """
+                    
+                    explanation = models['nlp'](prompt, max_length=150)[0]['generated_text']
+                    
+                    with col2:
+                        st.subheader("Prediction Results")
+                        
+                        fig = go.Figure(go.Indicator(
+                            mode = "gauge+number",
+                            value = churn_probability * 100,
+                            domain = {'x': [0, 1], 'y': [0, 1]},
+                            title = {'text': "Churn Risk"},
+                            gauge = {
+                                'axis': {'range': [0, 100]},
+                                'bar': {'color': "darkblue"},
+                                'steps': [
+                                    {'range': [0, 30], 'color': "lightgreen"},
+                                    {'range': [30, 70], 'color': "yellow"},
+                                    {'range': [70, 100], 'color': "red"}
+                                ]
+                            }
+                        ))
+                        st.plotly_chart(fig)
+                        
+                        st.markdown("### AI Analysis")
+                        st.info(explanation)
+                        st.markdown("### Recommended Actions")
+                        if churn_probability < 0.3:
+                            st.success("Low Risk: Continue regular engagement")
+                        elif churn_probability < 0.7:
+                            st.warning("Medium Risk: Consider proactive retention measures")
+                        else:
+                            st.error("High Risk: Immediate intervention required")
+                         # Add recommendations
+                    st.subheader("Personalized Recommendations")
+                    recommendations = get_recommendations(input_data)
+                    for rec in recommendations:
+                        st.write(f"- {rec}")
+                        
+                except Exception as e:
+                    st.error(f"Prediction failed: {str(e)}")
+
+def show_revenue_forecasting(df, models):
+    st.title("💰 Revenue Forecasting")
+    
+    try:
+        historical_data = df.groupby('TenureMonths')['TotalRevenue'].sum().reset_index()
+        
+        forecast_periods = st.slider("Forecast Periods", 1, 24, 12)
+        
+        X = historical_data[['TenureMonths']]
+        y = historical_data['TotalRevenue']
+        
+        forecast = models['revenue'].predict(pd.DataFrame({'TenureMonths': range(X['TenureMonths'].max() + 1, X['TenureMonths'].max() + 1 + forecast_periods)}))
+        
+        fig = go.Figure()
+        
+        fig.add_trace(go.Scatter(
+            x=historical_data['TenureMonths'],
+            y=historical_data['TotalRevenue'],
+            name='Historical Revenue',
+            line=dict(color='blue')
+        ))
+        
+        fig.add_trace(go.Scatter(
+            x=range(X['TenureMonths'].max() + 1, X['TenureMonths'].max() + 1 + forecast_periods),
+            y=forecast,
+            name='Forecast',
+            line=dict(color='red', dash='dash')
+        ))
+        
+        fig.update_layout(
+            title='Revenue Forecast',
+            xaxis_title='Tenure (Months)',
+            yaxis_title='Revenue ($)',
+            hovermode='x unified'
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(
+                "Forecasted Revenue (Next Period)",
+                f"${forecast[0]:,.0f}",
+                f"{((forecast[0] - y.iloc[-1]) / y.iloc[-1] * 100):+.1f}%"
+            )
+        with col2:
+            st.metric(
+                "Forecast Accuracy",
+                f"{models['revenue'].score(X, y) * 100:.1f}%",
+                "Based on historical performance"
+            )
+        with col3:
+            trend = "Upward" if forecast[-1] > forecast[0] else "Downward"
+            st.metric(
+                "Trend",
+                trend,
+                f"{((forecast[-1] - forecast[0]) / forecast[0] * 100):+.1f}%"
+            )
+        
+        # Add export functionality
+        export_format = st.selectbox("Export Format", ["CSV", "Excel", "PDF"])
+        if st.button("Export Forecast"):
+            export_data = pd.DataFrame({
+                'Date': pd.date_range(start=datetime.now(), periods=forecast_periods, freq='M'),
+                'Forecasted_Revenue': forecast
+            })
+            file_content = export_data(export_data, export_format.lower())
+            st.download_button(
+                label=f"Download {export_format}",
+                data=file_content,
+                file_name=f"revenue_forecast.{export_format.lower()}",
+                mime="application/octet-stream"
+            )
+            
+    except Exception as e:
+        st.error(f"Forecasting failed: {str(e)}")
+
+def show_analytics_dashboard(df):
+    st.title("📊 Analytics Dashboard")
+    
+    try:
+        # Revenue by Tenure
+        st.subheader("Revenue by Tenure")
+        fig = px.line(
+            df.groupby('TenureMonths')['TotalRevenue'].sum().reset_index(),
+            x='TenureMonths',
+            y='TotalRevenue',
+            title='Revenue by Tenure'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Customer Segments
+            st.markdown("### Customer Segments")
+            fig = px.pie(
+                df['SubscriptionType'].value_counts().reset_index(),
+                values='count',
+                names='SubscriptionType',
+                title='Customer Segments Distribution'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            # Service Usage
+            st.markdown("### Service Usage")
+            usage_data = pd.DataFrame({
+                'Service': ['Data', 'Call', 'SMS'],
+                'Usage': [df['DataUsageGB'].mean(), df['CallUsageMin'].mean(), df['SMSUsage'].mean()]
+            })
+            fig = px.bar(
+                usage_data,
+                x='Service',
+                y='Usage',
+                title='Average Service Usage'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Churn Analysis
+        st.subheader("Churn Analysis")
+        churn_by_contract = df.groupby('ContractType')['Churned'].mean().reset_index()
+        fig = px.bar(
+            churn_by_contract,
+            x='ContractType',
+            y='Churned',
+            title='Churn Rate by Contract Type'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Customer Satisfaction
+        st.subheader("Customer Satisfaction")
+        satisfaction_dist = df['ServiceRating'].value_counts().sort_index().reset_index()
+        satisfaction_dist.columns = ['Rating', 'Count']
+        fig = px.bar(
+            satisfaction_dist,
+            x='Rating',
+            y='Count',
+            title='Distribution of Service Ratings'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Add anomaly detection
+        st.subheader("Anomaly Detection")
+        anomaly_column = st.selectbox("Select column for anomaly detection", df.select_dtypes(include=[np.number]).columns)
+        anomalies = detect_anomalies(df, anomaly_column)
+        st.write(f"Detected {len(anomalies)} anomalies in {anomaly_column}")
+        st.write(anomalies)
+        
+    except Exception as e:
+        st.error(f"Failed to generate analytics dashboard: {str(e)}")     def show_chatbot(model, tokenizer, df):
+    st.title("💬 Analytics Assistant")
+    
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    
+    # Add voice input option
+    use_voice = st.checkbox("Use voice input")
+    
+    if use_voice:
+        if st.button("Start voice input"):
+            prompt = voice_interaction()
+    else:
+        prompt = st.chat_input("Ask about your data...")
+    
+    if prompt:
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+            
+        with st.chat_message("assistant"):
+            if model and tokenizer:
+                try:
+                    start_time = time.time()
+                    response = generate_response(prompt, model, tokenizer, df)
+                    end_time = time.time()
+                    st.markdown(response)
+                    st.session_state.messages.append({"role": "assistant", "content": response})
+                    st.info(f"Response generated in {end_time - start_time:.2f} seconds")
+                    
+                    # Add predictive text suggestions
+                    suggestions = get_predictive_text(prompt, model, tokenizer)
+                    st.write("Suggested next queries:")
+                    for suggestion in suggestions:
+                        if st.button(suggestion):
+                            st.session_state.messages.append({"role": "user", "content": suggestion})
+                            
+                except Exception as e:
+                    st.error(f"Failed to generate response: {str(e)}")
+            else:
+                st.error("Chatbot model not loaded. Please check the logs for details.")
+
+def show_document_insights():
+    st.title("📄 Document Insights")
+    
+    uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+    if uploaded_file is not None:
+        try:
+            # Read the uploaded file
+            user_df = pd.read_csv(uploaded_file)
+            
+            st.subheader("Data Overview")
+            st.write(user_df.head())
+            
+            st.subheader("Basic Statistics")
+            st.write(user_df.describe())
+            
+            st.subheader("Column Information")
+            for column in user_df.columns:
+                st.write(f"**{column}**")
+                st.write(f"- Type: {user_df[column].dtype}")
+                st.write(f"- Unique Values: {user_df[column].nunique()}")
+                st.write(f"- Missing Values: {user_df[column].isnull().sum()}")
+            st.subheader("Data Visualization")
+            column_to_plot = st.selectbox("Select a column to visualize", user_df.columns)
+            if user_df[column_to_plot].dtype in ['int64', 'float64']:
+                fig = px.histogram(user_df, x=column_to_plot)
+                st.plotly_chart(fig)
+            else:
+                fig = px.bar(user_df[column_to_plot].value_counts().reset_index(), x='index', y=column_to_plot)
+                st.plotly_chart(fig)
+            
+            st.subheader("Custom Analysis")
+            custom_query = st.text_area("Enter a custom pandas query (e.g., df['column'].mean())")
+            if custom_query:
+                try:
+                    result = eval(f"user_df.{custom_query}")
+                    st.write("Result:", result)
+                except Exception as e:
+                    st.error(f"Error in custom query: {str(e)}")
+            
+            st.subheader("AI-Powered Insights")
+            if st.button("Generate Insights"):
+                insights = generate_document_insights(user_df)
+                st.write(insights)
+            
+            # Add export functionality
+            export_format = st.selectbox("Export Format", ["CSV", "Excel", "PDF"])
+            if st.button("Export Data"):
+                file_content = export_data(user_df, export_format.lower())
+                st.download_button(
+                    label=f"Download {export_format}",
+                    data=file_content,
+                    file_name=f"document_insights.{export_format.lower()}",
+                    mime="application/octet-stream"
+                )
+            
+        except Exception as e:
+            st.error(f"Error processing the file: {str(e)}")
+
+def show_settings():
+    st.title("⚙️ Settings")
+    
+    try:
+        st.subheader("User Preferences")
+        notifications = st.checkbox("Enable Email Notifications", value=True)
+        theme = st.selectbox("Theme", ["Light", "Dark", "System"])
+        language = st.selectbox("Language", ["English", "Spanish", "French", "German"])
+        
+        if st.button("Save Preferences"):
+            # Here you would typically save these preferences to a database
+            st.success("Preferences saved successfully!")
+        
+        st.subheader("Data Management")
+        if st.button("Refresh Data"):
+            st.cache_resource.clear()
+            st.success("Data refreshed successfully!")
+        
+        st.subheader("Account Settings")
+        if st.button("Change Password"):
+            st.info("Password change functionality to be implemented.")
+        
+        # Add A/B testing setup
+        st.subheader("A/B Testing")
+        test_name = st.text_input("Test Name")
+        variant_a = st.text_input("Variant A")
+        variant_b = st.text_input("Variant B")
+        if st.button("Set up A/B Test"):
+            setup_ab_test(test_name, variant_a, variant_b)
+            st.success(f"A/B test '{test_name}' set up successfully!")
+        
+        # Add language translation
+        st.subheader("Translate Interface")
+        text_to_translate = st.text_area("Enter text to translate")
+        target_language = st.selectbox("Select target language", ["Spanish", "French", "German"])
+        if st.button("Translate"):
+            translated_text = translate_text(text_to_translate, target_language)
+            st.write("Translated text:", translated_text)
+        
+    except Exception as e:
+        st.error(f"Failed to load or save settings: {str(e)}")    def ForeTelAI():
+    if check_password():
+        with st.sidebar:
+            selected = option_menu(
+                "Navigation",
+                ["Home", "Churn Prediction", "Revenue Forecasting", "Analytics Dashboard", "Chat Assistant", "Document Insights", "Settings"],
+                icons=['house', 'person-x', 'cash-coin', 'graph-up', 'chat-dots', 'file-text', 'gear'],
+                menu_icon="cast",
+                default_index=0,
+            )
+        
+        if selected == "Home":
+            show_home_page(df)
+        elif selected == "Churn Prediction":
+            show_churn_prediction(df, models)
+        elif selected == "Revenue Forecasting":
+            show_revenue_forecasting(df, models)
+        elif selected == "Analytics Dashboard":
+            show_analytics_dashboard(df)
+        elif selected == "Chat Assistant":
+            show_chatbot(chatbot_model, chatbot_tokenizer, df)
+        elif selected == "Document Insights":
+            show_document_insights()
+        elif selected == "Settings":
+            show_settings()
+
+    # Handle button clicks from AI-Powered Insights
+    if 'button_clicked' not in st.session_state:
+        st.session_state.button_clicked = None
+
+    button_clicked = st.query_params.get('button', [None])[0]
+    if button_clicked:
+        st.session_state.button_clicked = button_clicked
+        st.experimental_set_query_params()
+
+if __name__ == "__main__":
+    ForeTelAI()

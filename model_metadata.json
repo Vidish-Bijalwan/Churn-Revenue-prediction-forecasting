@@ -1,0 +1,35 @@
+{
+    "churn_features": [
+        "Age",
+        "MonthlyIncome",
+        "MonthlySpending",
+        "NetworkQuality",
+        "DataUsageGB",
+        "CallUsageMin",
+        "SMSUsage",
+        "CustomerCareCalls",
+        "TenureMonths",
+        "ServiceRating"
+    ],
+    "revenue_features": [
+        "MonthlyIncome",
+        "MonthlySpending",
+        "DataUsageGB",
+        "CallUsageMin",
+        "SMSUsage",
+        "TenureMonths",
+        "ServiceRating"
+    ],
+    "default_values": {
+        "Age": 35,
+        "MonthlyIncome": 5000,
+        "MonthlySpending": 500,
+        "NetworkQuality": 3,
+        "DataUsageGB": 20,
+        "CallUsageMin": 300,
+        "SMSUsage": 100,
+        "CustomerCareCalls": 2,
+        "TenureMonths": 12,
+        "ServiceRating": 4
+    }
+}
