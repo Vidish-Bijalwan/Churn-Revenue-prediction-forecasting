@@ -12,8 +12,76 @@ import time
 import random
 import json
 
-# Import enhanced config
-from enhanced_config import ENHANCED_UI_CSS, ENHANCED_JS, CHATBOT_CONFIG, FEATURE_FLAGS
+# Import chatbot engine - with fallback for deployment
+try:
+    from chatbot_engine import ChatbotEngine
+    chatbot_available = True
+except ImportError:
+    chatbot_available = False
+    # Simple fallback chatbot class
+    class ChatbotEngine:
+        def __init__(self):
+            pass
+        
+        def get_response(self, message):
+            responses = [
+                "I'm here to help with your telecom analytics questions!",
+                "Based on your data, I can provide insights about customer churn and revenue forecasting.",
+                "Let me analyze that for you. What specific metrics would you like to explore?",
+                "I can help you understand customer behavior patterns and revenue trends.",
+                "Would you like me to explain the churn prediction results or revenue forecasts?"
+            ]
+            return random.choice(responses)
+        
+        def get_suggestions(self):
+            return [
+                "What's my churn rate?",
+                "Show revenue forecast",
+                "Customer insights",
+                "Risk analysis"
+            ]
+
+# Import enhanced config - with fallback for Streamlit Cloud
+try:
+    from enhanced_config import ENHANCED_UI_CSS, ENHANCED_JS, CHATBOT_CONFIG, FEATURE_FLAGS
+except ImportError:
+    # Fallback CSS for Streamlit Cloud deployment
+    ENHANCED_UI_CSS = """
+    <style>
+    .metric-card, .info-card, .feature-card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        transition: all 0.3s ease;
+    }
+    .metric-card:hover, .info-card:hover, .feature-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(31, 38, 135, 0.2);
+    }
+    .chat-message {
+        padding: 1rem;
+        margin: 0.5rem 0;
+        border-radius: 12px;
+    }
+    .chat-message.user {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        margin-left: 20%;
+    }
+    .chat-message.bot {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+        margin-right: 20%;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    </style>
+    """
+    ENHANCED_JS = "<script></script>"
+    CHATBOT_CONFIG = {}
+    FEATURE_FLAGS = {"enhanced_ui": True}
 
 # Page Configuration
 st.set_page_config(
