@@ -546,15 +546,6 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ---
 
-## 🆘 Support
-
-### Getting Help
-
-- **Documentation**: Check our comprehensive [docs](docs/)
-- **Issues**: Report bugs on [GitHub Issues](https://github.com/your-repo/issues)
-- **Discussions**: Join [GitHub Discussions](https://github.com/your-repo/discussions)
-- **Email**: Contact us at support@foretel-ai.com
-
 ### FAQ
 
 **Q: Can I use my own data?**
@@ -591,7 +582,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Made with ❤️ by the ForeTel.AI Team**
 
-[![GitHub Stars](https://img.shields.io/github/stars/your-repo/foretel-ai?style=social)](https://github.com/your-repo/foretel-ai)
+[![GitHub Stars](https://img.shields.io/github/stars/your-repo/foretel-ai?style=social)](https://github.com/Vidish-Bijalwan/Churn-Revenue-prediction-forecasting)
 [![Twitter Follow](https://img.shields.io/twitter/follow/foretelai?style=social)](https://x.com/vidish_sirus)
 
 </div>
