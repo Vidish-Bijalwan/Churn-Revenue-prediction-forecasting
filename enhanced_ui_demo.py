@@ -1,5 +1,5 @@
 """
-Enhanced ForeTel.AI UI/UX Demo with Modern Animations and AI Chatbot
+ForeTel.AI UI/UX Demo with Modern Animations and AI Chatbot
 """
 
 import streamlit as st
@@ -41,12 +41,12 @@ except ImportError:
                 "Risk analysis"
             ]
 
-# Import enhanced config - with fallback for Streamlit Cloud
+# Import config - with fallback for Streamlit Cloud
 try:
     from enhanced_config import ENHANCED_UI_CSS, ENHANCED_JS, CHATBOT_CONFIG, FEATURE_FLAGS
 except ImportError:
     # Fallback CSS for Streamlit Cloud deployment
-    ENHANCED_UI_CSS = """
+    UI_CSS = """
     <style>
     .metric-card, .info-card, .feature-card {
         background: rgba(255, 255, 255, 0.05);
@@ -79,21 +79,25 @@ except ImportError:
     }
     </style>
     """
-    ENHANCED_JS = "<script></script>"
+    JS_CODE = "<script></script>"
     CHATBOT_CONFIG = {}
-    FEATURE_FLAGS = {"enhanced_ui": True}
+    FEATURE_FLAGS = {"modern_ui": True}
 
 # Page Configuration
 st.set_page_config(
-    page_title="ForeTel.AI - Enhanced UI Demo",
+    page_title="ForeTel.AI - Modern UI Demo",
     page_icon="📡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Apply Enhanced Styling
-st.markdown(ENHANCED_UI_CSS, unsafe_allow_html=True)
-st.markdown(ENHANCED_JS, unsafe_allow_html=True)
+# Apply Modern Styling
+if 'ENHANCED_UI_CSS' in locals():
+    st.markdown(ENHANCED_UI_CSS, unsafe_allow_html=True)
+    st.markdown(ENHANCED_JS, unsafe_allow_html=True)
+else:
+    st.markdown(UI_CSS, unsafe_allow_html=True)
+    st.markdown(JS_CODE, unsafe_allow_html=True)
 
 # Initialize Session State
 if 'chat_history' not in st.session_state:
@@ -165,25 +169,25 @@ def render_animated_header():
             <h1 style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                        -webkit-background-clip: text; -webkit-text-fill-color: transparent; 
                        font-size: 3rem; font-weight: 700; margin-bottom: 0.5rem;">
-                📡 ForeTel.AI Enhanced
+                📡 ForeTel.AI
             </h1>
             <p style="font-size: 1.2rem; color: var(--text-secondary); margin-bottom: 1rem;">
                 Modern UI/UX with AI-Powered Analytics
             </p>
             <div class="status-indicator">
-                <span class="status-online">●</span> Enhanced UI Active | 
+                <span class="status-online">●</span> Modern UI Active | 
                 <span style="color: var(--text-secondary);">Last Updated: {}</span>
             </div>
         </div>
     </div>
     """.format(datetime.now().strftime("%Y-%m-%d %H:%M")), unsafe_allow_html=True)
 
-# Enhanced Navigation
+# Navigation
 def render_navigation():
     with st.sidebar:
         st.markdown("""
         <div style="text-align: center; padding: 1rem 0;">
-            <h2 style="color: var(--text-primary);">🚀 Enhanced Navigation</h2>
+            <h2 style="color: var(--text-primary);">🚀 Navigation</h2>
         </div>
         """, unsafe_allow_html=True)
         
@@ -207,7 +211,7 @@ def render_navigation():
             st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
             st.rerun()
 
-# Enhanced Metrics Display
+# Metrics Display
 def render_metrics_cards(df):
     col1, col2, col3, col4 = st.columns(4)
     
@@ -239,7 +243,7 @@ def render_home_page():
     df = generate_sample_data()
     render_metrics_cards(df)
     
-    st.markdown("## 🚀 Enhanced Features Demo")
+    st.markdown("## 🚀 Features Demo")
     
     col1, col2, col3 = st.columns(3)
     
@@ -278,7 +282,7 @@ def render_home_page():
 
 # Analytics Demo
 def render_analytics_demo():
-    st.markdown("# 📊 Enhanced Analytics Demo")
+    st.markdown("# 📊 Analytics Demo")
     
     df = generate_sample_data()
     render_metrics_cards(df)
@@ -340,8 +344,8 @@ def render_chat_demo():
     
     st.markdown("""
     <div class="info-card">
-        <h3>💡 Enhanced AI Chat Features</h3>
-        <p>This demo showcases the enhanced chatbot with modern UI and intelligent responses.</p>
+        <h3>💡 AI Chat Features</h3>
+        <p>This demo showcases the chatbot with modern UI and intelligent responses.</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1048,7 +1052,7 @@ def render_settings():
         st.markdown("""
         <div class="info-card">
             <h4>📱 Application Info</h4>
-            <p><strong>Version:</strong> 2.0.0 Enhanced</p>
+            <p><strong>Version:</strong> 2.0.0</p>
             <p><strong>Build:</strong> 2025.09.20</p>
             <p><strong>Environment:</strong> Production</p>
         </div>
