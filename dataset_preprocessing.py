@@ -1,12 +1,23 @@
 import pandas as pd
 import numpy as np
+import os
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
-# Load dataset
-df = pd.read_csv("telecom_dataset.csv")
+# Load dataset with error handling
+try:
+    if os.path.exists("telecom_dataset.csv"):
+        df = pd.read_csv("telecom_dataset.csv")
+    elif os.path.exists("telecom_dataset_generated.csv"):
+        df = pd.read_csv("telecom_dataset_generated.csv")
+    else:
+        print("No dataset found. Please run dataset_generator.py first.")
+        exit(1)
+except Exception as e:
+    print(f"Error loading dataset: {e}")
+    exit(1)
 
 # Display initial info
 print("Dataset Info:")

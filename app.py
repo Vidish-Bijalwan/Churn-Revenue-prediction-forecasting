@@ -10,17 +10,31 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 import joblib
-from streamlit_option_menu import option_menu
 import os
 from datetime import datetime, timedelta
 import time
 import base64
 from typing import Dict, Any
-from dotenv import load_dotenv
 import logging
+import warnings
 
-# Load environment variables
-load_dotenv()
+# Suppress warnings
+warnings.filterwarnings('ignore')
+
+# Try to import optional dependencies
+try:
+    from streamlit_option_menu import option_menu
+    HAS_OPTION_MENU = True
+except ImportError:
+    HAS_OPTION_MENU = False
+    st.warning("streamlit-option-menu not installed. Using standard sidebar.")
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    HAS_DOTENV = True
+except ImportError:
+    HAS_DOTENV = False
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -101,15 +115,68 @@ def load_data():
         pd.DataFrame: Preprocessed telecom dataset
     """
     try:
-        file_path = os.getenv('DATA_PATH', 'telecom_dataset.csv')
-        df = pd.read_csv(file_path)
-        df['TotalRevenue'] = df['MonthlySpending'] * df['TenureMonths']
-        df['ARPU'] = df['TotalRevenue'] / df['TenureMonths']
+        # Try multiple possible file paths
+        possible_paths = [
+            'telecom_dataset.csv',
+            'telecom_dataset_generated.csv',
+            'telecom_dataset_preprocessed.csv',
+            os.path.join('data', 'telecom_dataset.csv')
+        ]
+        
+        df = None
+        for file_path in possible_paths:
+            if os.path.exists(file_path):
+                df = pd.read_csv(file_path)
+                logger.info(f"Successfully loaded data from {file_path}")
+                break
+        
+        if df is None:
+            logger.warning("No dataset found, generating sample data")
+            return generate_sample_data()
+        
+        # Ensure required columns exist
+        if 'TotalRevenue' not in df.columns and 'MonthlySpending' in df.columns and 'TenureMonths' in df.columns:
+            df['TotalRevenue'] = df['MonthlySpending'] * df['TenureMonths']
+        
+        if 'ARPU' not in df.columns and 'TotalRevenue' in df.columns and 'TenureMonths' in df.columns:
+            df['ARPU'] = df['TotalRevenue'] / df['TenureMonths'].replace(0, 1)  # Avoid division by zero
+        
         return df
     except Exception as e:
         logger.error(f"Failed to load dataset: {str(e)}")
-        st.error(f"Failed to load dataset. Please check if the file exists and is accessible.")
-        return pd.DataFrame()
+        st.error(f"Failed to load dataset: {str(e)}. Generating sample data instead.")
+        return generate_sample_data()
+
+def generate_sample_data():
+    """Generate sample telecom data if no dataset is found."""
+    np.random.seed(42)
+    n_customers = 1000
+    
+    data = {
+        'CustomerID': [f'CUST_{i:04d}' for i in range(n_customers)],
+        'Age': np.random.randint(18, 80, n_customers),
+        'Gender': np.random.choice(['Male', 'Female'], n_customers),
+        'Region': np.random.choice(['North', 'South', 'East', 'West', 'Central'], n_customers),
+        'TenureMonths': np.random.randint(1, 72, n_customers),
+        'MonthlySpending': np.random.uniform(20, 150, n_customers),
+        'SubscriptionType': np.random.choice(['Basic', 'Standard', 'Premium'], n_customers),
+        'ContractType': np.random.choice(['Month-to-Month', 'One Year', 'Two Year'], n_customers),
+        'PaymentMethod': np.random.choice(['Credit Card', 'Bank Transfer', 'Electronic Check'], n_customers),
+        'NetworkQuality': np.random.randint(1, 6, n_customers),
+        'DataUsageGB': np.random.uniform(5, 100, n_customers),
+        'CallUsageMin': np.random.uniform(100, 1000, n_customers),
+        'SMSUsage': np.random.randint(50, 500, n_customers),
+        'CustomerCareCalls': np.random.randint(0, 10, n_customers),
+        'ServiceRating': np.random.randint(1, 6, n_customers),
+        'ChurnRiskScore': np.random.uniform(0, 1, n_customers),
+        'Churned': np.random.choice([0, 1], n_customers, p=[0.8, 0.2])
+    }
+    
+    df = pd.DataFrame(data)
+    df['TotalRevenue'] = df['MonthlySpending'] * df['TenureMonths']
+    df['ARPU'] = df['TotalRevenue'] / df['TenureMonths']
+    
+    return df
 
 @st.cache_resource
 def load_models():
@@ -119,18 +186,44 @@ def load_models():
     Returns:
         dict: Dictionary containing loaded models
     """
+    models = {}
+    models_dir = 'models'
+    
     try:
-        models_dir = os.getenv('MODELS_DIR', 'models')
-        churn_model = joblib.load(os.path.join(models_dir, 'enhanced_churn_model.pkl'))
-        revenue_model = joblib.load(os.path.join(models_dir, 'revenue_forecasting.pkl'))
-        return {
-            'churn': churn_model,
-            'revenue': revenue_model
-        }
+        # Try to load churn model
+        churn_model_path = os.path.join(models_dir, 'enhanced_churn_model.pkl')
+        if os.path.exists(churn_model_path):
+            models['churn'] = joblib.load(churn_model_path)
+            logger.info("Churn model loaded successfully")
+        else:
+            logger.warning(f"Churn model not found at {churn_model_path}")
+            
+        # Try to load revenue model
+        revenue_model_path = os.path.join(models_dir, 'revenue_forecasting.pkl')
+        if os.path.exists(revenue_model_path):
+            models['revenue'] = joblib.load(revenue_model_path)
+            logger.info("Revenue model loaded successfully")
+        else:
+            logger.warning(f"Revenue model not found at {revenue_model_path}")
+            
+        # Try to load supporting files
+        scaler_path = os.path.join(models_dir, 'scaler.pkl')
+        if os.path.exists(scaler_path):
+            models['scaler'] = joblib.load(scaler_path)
+            
+        train_columns_path = os.path.join(models_dir, 'train_columns.pkl')
+        if os.path.exists(train_columns_path):
+            models['train_columns'] = joblib.load(train_columns_path)
+            
+        imputer_path = os.path.join(models_dir, 'imputer.pkl')
+        if os.path.exists(imputer_path):
+            models['imputer'] = joblib.load(imputer_path)
+            
     except Exception as e:
         logger.error(f"Failed to load models: {str(e)}")
-        st.error("Failed to load models. Please check if model files exist and are accessible.")
-        return {}
+        st.warning(f"Some models could not be loaded: {str(e)}")
+    
+    return models
 
 # Load data and models
 df = load_data()
@@ -387,11 +480,13 @@ def show_churn_prediction(df, models):
                     churn_model = models['churn']
                     st.write(f"Debug: Churn model type: {type(churn_model)}")
 
-                    # Load the scaler and train_columns
-                    scaler_path = os.path.join(os.getenv('MODELS_DIR', 'models'), 'scaler.pkl')
-                    scaler = joblib.load(scaler_path)
-                    train_columns_path = os.path.join(os.getenv('MODELS_DIR', 'models'), 'train_columns.pkl')
-                    train_columns = joblib.load(train_columns_path)
+                    # Load the scaler and train_columns from models dict
+                    if 'scaler' in models and 'train_columns' in models:
+                        scaler = models['scaler']
+                        train_columns = models['train_columns']
+                    else:
+                        st.error("Required model components (scaler, train_columns) not found.")
+                        return
 
                     # Preprocess input data to match training preprocessing (scaling, encoding, etc.)
                     input_data_imputed = input_data.fillna(0)  # Simple imputation (you can add more sophisticated methods)
@@ -758,13 +853,20 @@ def ForeTelAI():
     Main function to run the ForeTel.AI application.
     """
     with st.sidebar:
-        selected = option_menu(
-            "Navigation",
-            ["Home", "Churn Prediction", "Revenue Forecasting", "Analytics Dashboard", "Chat Assistant", "Document Insights"],
-            icons=['house', 'person-x', 'cash-coin', 'graph-up', 'chat-dots', 'file-text'],
-            menu_icon="cast",
-            default_index=0,
-        )
+        if HAS_OPTION_MENU:
+            selected = option_menu(
+                "Navigation",
+                ["Home", "Churn Prediction", "Revenue Forecasting", "Analytics Dashboard", "Chat Assistant", "Document Insights"],
+                icons=['house', 'person-x', 'cash-coin', 'graph-up', 'chat-dots', 'file-text'],
+                menu_icon="cast",
+                default_index=0,
+            )
+        else:
+            # Fallback to standard selectbox if option_menu is not available
+            selected = st.selectbox(
+                "Navigation",
+                ["Home", "Churn Prediction", "Revenue Forecasting", "Analytics Dashboard", "Chat Assistant", "Document Insights"]
+            )
     
     if selected == "Home":
         show_home_page(df)

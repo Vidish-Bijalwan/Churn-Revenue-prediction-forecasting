@@ -1,15 +1,26 @@
 import pandas as pd
 import numpy as np
-from faker import Faker
+import os
 from datetime import datetime, timedelta
+
+# Try to import Faker, use fallback if not available
+try:
+    from faker import Faker
+    fake = Faker()
+    HAS_FAKER = True
+except ImportError:
+    HAS_FAKER = False
+    print("Warning: Faker not installed. Using simple UUID generation.")
 
 # Set random seed for reproducibility
 np.random.seed(42)
-fake = Faker()
 
 def generate_telecom_dataset(num_customers=10000):
     # Generate customer IDs
-    customer_ids = [fake.unique.uuid4() for _ in range(num_customers)]
+    if HAS_FAKER:
+        customer_ids = [fake.unique.uuid4() for _ in range(num_customers)]
+    else:
+        customer_ids = [f'CUST_{i:06d}_{np.random.randint(1000, 9999)}' for i in range(num_customers)]
     
     # Generate basic customer information
     genders = np.random.choice(['Male', 'Female', 'Other'], num_customers, p=[0.49, 0.49, 0.02])
@@ -78,24 +89,25 @@ def generate_telecom_dataset(num_customers=10000):
     
     return df
 
-# Generate the dataset
-telecom_df = generate_telecom_dataset(num_customers=10000)
+if __name__ == "__main__":
+    # Generate the dataset
+    telecom_df = generate_telecom_dataset(num_customers=10000)
 
-# Display dataset info
-print("Dataset Info:")
-print(telecom_df.info())
+    # Display dataset info
+    print("Dataset Info:")
+    print(telecom_df.info())
 
-# Display summary statistics
-print("\nSummary Statistics:")
-print(telecom_df.describe())
+    # Display summary statistics
+    print("\nSummary Statistics:")
+    print(telecom_df.describe())
 
-# Display unique values in categorical columns
-categorical_columns = ['Gender', 'Region', 'SubscriptionType', 'ContractType', 'PaymentMethod']
-for col in categorical_columns:
-    print(f"\nUnique values in column {col}:")
-    print(telecom_df[col].value_counts(normalize=True))
+    # Display unique values in categorical columns
+    categorical_columns = ['Gender', 'Region', 'SubscriptionType', 'ContractType', 'PaymentMethod']
+    for col in categorical_columns:
+        print(f"\nUnique values in column {col}:")
+        print(telecom_df[col].value_counts(normalize=True))
 
-# Save the generated dataset
-telecom_df.to_csv("telecom_dataset_generated.csv", index=False)
-print("\nDataset generation completed. Saved as 'telecom_dataset_generated.csv'.")
+    # Save the generated dataset
+    telecom_df.to_csv("telecom_dataset_generated.csv", index=False)
+    print("\nDataset generation completed. Saved as 'telecom_dataset_generated.csv'.")
 

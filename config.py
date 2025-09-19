@@ -93,10 +93,30 @@ footer = """
 </div>
 """
 
+# Application Configuration
+import os
+
 # Environment variables (replace with actual values in production)
-OPENAI_API_KEY = "your-openai-api-key"
-DATA_PATH = "data/telecom_dataset.csv"
-MODELS_DIR = "models/"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "your-openai-api-key")
+DATA_PATH = os.getenv("DATA_PATH", "telecom_dataset.csv")
+MODELS_DIR = os.getenv("MODELS_DIR", "models")
+
+# Data file paths (in order of preference)
+DATA_FILE_PATHS = [
+    "telecom_dataset.csv",
+    "telecom_dataset_generated.csv", 
+    "telecom_dataset_preprocessed.csv",
+    os.path.join("data", "telecom_dataset.csv")
+]
+
+# Model file paths
+MODEL_FILES = {
+    "churn_model": "enhanced_churn_model.pkl",
+    "revenue_model": "revenue_forecasting.pkl",
+    "scaler": "scaler.pkl",
+    "imputer": "imputer.pkl",
+    "train_columns": "train_columns.pkl"
+}
 
 # User preferences (to be saved/loaded from a database in a real application)
 DEFAULT_THEME = "light"
@@ -107,5 +127,24 @@ CHATBOT_MODEL = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 MAX_CHATBOT_HISTORY = 10
 
 # Security settings
-ALLOWED_EXTENSIONS = {'csv', 'xlsx'}
-MAX_UPLOAD_SIZE_MB = 10
+ALLOWED_EXTENSIONS = {'csv', 'xlsx', 'json'}
+MAX_UPLOAD_SIZE_MB = 50
+
+# Application settings
+DEBUG_MODE = os.getenv("DEBUG_MODE", "False").lower() == "true"
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+# Database settings
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///telecom_analytics.db")
+
+# Feature columns for models
+CHURN_FEATURES = [
+    "Age", "MonthlyIncome", "MonthlySpending", "NetworkQuality",
+    "DataUsageGB", "CallUsageMin", "SMSUsage", "CustomerCareCalls",
+    "TenureMonths", "ServiceRating"
+]
+
+REVENUE_FEATURES = [
+    "MonthlyIncome", "MonthlySpending", "DataUsageGB", "CallUsageMin",
+    "SMSUsage", "TenureMonths", "ServiceRating"
+]

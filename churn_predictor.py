@@ -7,6 +7,7 @@ from sklearn.metrics import classification_report, roc_auc_score
 from sklearn.impute import SimpleImputer
 import joblib
 import matplotlib.pyplot as plt
+import os
 
 class EnhancedChurnPredictor:
     def __init__(self, data_path: str):
@@ -89,10 +90,12 @@ class EnhancedChurnPredictor:
         print("ROC-AUC Score:", roc_auc_score(y_val, y_pred))
 
         # Save the trained model, imputer, scaler, and columns
-        joblib.dump(self.model, r"D:\FROM_C_DRIVE\Foretel\models\enhanced_churn_model.pkl")
-        joblib.dump(self.imputer, r"D:\FROM_C_DRIVE\Foretel\models\imputer.pkl")
-        joblib.dump(self.scaler, r"D:\FROM_C_DRIVE\Foretel\models\scaler.pkl")
-        joblib.dump(self.train_columns, r"D:\FROM_C_DRIVE\Foretel\models\train_columns.pkl")
+        models_dir = "models"
+        os.makedirs(models_dir, exist_ok=True)
+        joblib.dump(self.model, os.path.join(models_dir, "enhanced_churn_model.pkl"))
+        joblib.dump(self.imputer, os.path.join(models_dir, "imputer.pkl"))
+        joblib.dump(self.scaler, os.path.join(models_dir, "scaler.pkl"))
+        joblib.dump(self.train_columns, os.path.join(models_dir, "train_columns.pkl"))
 
     def preprocess_input_data(self, input_data):
         """
@@ -109,7 +112,7 @@ class EnhancedChurnPredictor:
         input_data_encoded = pd.get_dummies(input_data)
 
         # Load the train_columns to align features
-        train_columns_path = r"D:\FROM_C_DRIVE\Foretel\models\train_columns.pkl"
+        train_columns_path = os.path.join("models", "train_columns.pkl")
         train_columns = joblib.load(train_columns_path)
 
         # Add missing columns with default value 0
@@ -125,7 +128,7 @@ class EnhancedChurnPredictor:
         # print("Final input shape after alignment:", input_data_encoded.shape)
 
         # Scale numerical features
-        scaler_path = r"D:\FROM_C_DRIVE\Foretel\models\scaler.pkl"
+        scaler_path = os.path.join("models", "scaler.pkl")
         scaler = joblib.load(scaler_path)
         input_data_scaled = scaler.transform(input_data_encoded)
 
@@ -161,6 +164,7 @@ class EnhancedChurnPredictor:
         plt.show()
 
 
-# To train the model
-churn_predictor = EnhancedChurnPredictor(data_path="D:/FROM_C_DRIVE/Foretel/telecom_dataset_preprocessed.csv")
-churn_predictor.train_model()
+# To train the model (only run if this file is executed directly)
+if __name__ == "__main__":
+    churn_predictor = EnhancedChurnPredictor(data_path="telecom_dataset_preprocessed.csv")
+    churn_predictor.train_model()

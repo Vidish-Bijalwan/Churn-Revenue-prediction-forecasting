@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  # Core Infrastructure
+  postgres-main:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: foretel_db
+      POSTGRES_USER: foretel_user
+      POSTGRES_PASSWORD: foretel_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - foretel-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - foretel-network
+
+  # Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+    networks:
+      - foretel-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - foretel-network
+
+  # Current Streamlit App (Enhanced)
+  streamlit-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    ports:
+      - "8501:8501"
+    environment:
+      - DATABASE_URL=postgresql://foretel_user:foretel_pass@postgres-main:5432/foretel_db
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+      - .:/app
+    depends_on:
+      - postgres-main
+      - redis
+    networks:
+      - foretel-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  foretel-network:
+    driver: bridge
